@@ -30,13 +30,25 @@ class MailjetApiTransport extends AbstractApiTransport
     private const HOST = 'api.mailjet.com';
     private const API_VERSION = '3.1';
     private const FORBIDDEN_HEADERS = [
-        'Date', 'X-CSA-Complaints', 'Message-Id', 'X-Mailjet-Campaign', 'X-MJ-StatisticsContactsListID',
-        'DomainKey-Status', 'Received-SPF', 'Authentication-Results', 'Received', 'X-Mailjet-Prio',
+        'Date', 'X-CSA-Complaints', 'Message-Id', 'X-MJ-StatisticsContactsListID',
+        'DomainKey-Status', 'Received-SPF', 'Authentication-Results', 'Received',
         'From', 'Sender', 'Subject', 'To', 'Cc', 'Bcc', 'Reply-To', 'Return-Path', 'Delivered-To', 'DKIM-Signature',
         'X-Feedback-Id', 'X-Mailjet-Segmentation', 'List-Id', 'X-MJ-MID', 'X-MJ-ErrorMessage',
-        'X-MJ-TemplateErrorDeliver', 'X-MJ-TemplateErrorReporting', 'X-MJ-TemplateLanguage',
-        'X-Mailjet-Debug', 'User-Agent', 'X-Mailer', 'X-MJ-CustomID', 'X-MJ-EventPayload', 'X-MJ-Vars',
-        'X-Mailjet-TrackOpen', 'X-Mailjet-TrackClick', 'X-MJ-TemplateID', 'X-MJ-WorkflowID',
+        'X-Mailjet-Debug', 'User-Agent', 'X-Mailer', 'X-MJ-WorkflowID',
+    ];
+    private const HEADER_TO_MESSAGE = [
+        'X-MJ-TemplateLanguage'         => ['TemplateLanguage', 'bool'],
+        'X-MJ-TemplateID'               => ['TemplateID'],
+        'X-MJ-TemplateErrorReporting'   => ['TemplateErrorReporting'],
+        'X-MJ-TemplateErrorDeliver'     => ['TemplateErrorDeliver', 'bool'],
+        'X-MJ-Vars'                     => ['Variables', 'json'],
+        'X-MJ-CustomID'                 => ['CustomID'],
+        'X-MJ-EventPayload'             => ['EventPayload'],
+        'X-Mailjet-Campaign'            => ['CustomCampaign'],
+        'X-Mailjet-DeduplicateCampaign' => ['DeduplicateCampaign', 'bool'],
+        'X-Mailjet-Prio'                => ['Priority', 'int'],
+        'X-Mailjet-TrackClick'          => ['TrackClick'],
+        'X-Mailjet-TrackOpen'           => ['TrackOpen'],
     ];
 
     private $privateKey;
@@ -126,6 +138,11 @@ class MailjetApiTransport extends AbstractApiTransport
         }
 
         foreach ($email->getHeaders()->all() as $header) {
+            if (\array_key_exists($header->getName(), self::HEADER_TO_MESSAGE)) {
+                $convertConf = self::HEADER_TO_MESSAGE[$header->getName()];
+                $message[$convertConf[0]] = $this->castCustomHeader($header->getBodyAsString(), $convertConf[1]??'string');
+                continue;
+            }
             if (\in_array($header->getName(), self::FORBIDDEN_HEADERS, true)) {
                 continue;
             }
@@ -176,5 +193,20 @@ class MailjetApiTransport extends AbstractApiTransport
     private function getEndpoint(): ?string
     {
         return ($this->host ?: self::HOST).($this->port ? ':'.$this->port : '');
+    }
+
+    private function castCustomHeader(string $value, string $type)
+    {
+        switch ($type) {
+            case 'bool':
+                return !!$value;
+            case 'int':
+                return (int) $value;
+            case 'json':
+                return \json_decode($value, true);
+            case 'string':
+            default:
+                return $value;
+        }
     }
 }
